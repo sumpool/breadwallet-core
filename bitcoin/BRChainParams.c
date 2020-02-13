@@ -133,8 +133,8 @@ extern const BRCheckPoint *BRChainParamsGetCheckpointBeforeBlockNumber (const BR
 
 static const BRChainParams BRMainNetParamsRecord = {
     BRMainNetDNSSeeds,
-    8333,                  // standardPort
-    0xd9b4bef9,            // magicNumber
+    3333,                  // standardPort SUM
+    0xd0b5c0fa,            // magicNumber SUM
     SERVICES_NODE_WITNESS, // services
     BRMainNetVerifyDifficulty,
     BRMainNetCheckpoints,
@@ -146,8 +146,8 @@ const BRChainParams *BRMainNetParams = &BRMainNetParamsRecord;
 
 static const BRChainParams BRTestNetParamsRecord = {
     BRTestNetDNSSeeds,
-    18333,                 // standardPort
-    0x0709110b,            // magicNumber
+    13333,                 // standardPort TSUM
+    0xd3b7c2fd,            // magicNumber TSUM
     SERVICES_NODE_WITNESS, // services
     BRTestNetVerifyDifficulty,
     BRTestNetCheckpoints,
