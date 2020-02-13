@@ -69,7 +69,7 @@ public class SbiAIT {
     private static final long RUN_TIME_MS = 30 * 60 * 1000; // 30 minutes
 
     // period of time to wait before failing
-    private static final long FAIL_DELAY_MS = 5 * 60 * 1000; // 5 minutes
+    private static final long FAIL_DELAY_MS = 10 * 60 * 1000; // 10 minutes
 
     // period of time to return failure status codes
     private static final long FAIL_PERIOD_MS = 5 * 60 * 1000; // 5 minutes
