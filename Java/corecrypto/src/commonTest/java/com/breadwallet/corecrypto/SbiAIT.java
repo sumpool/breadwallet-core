@@ -68,6 +68,9 @@ public class SbiAIT {
     // test runtime
     private static final long RUN_TIME_MS = 30 * 60 * 1000; // 30 minutes
 
+    // period of time to wait before failing
+    private static final long FAIL_DELAY_MS = 5 * 60 * 1000; // 5 minutes
+
     // period of time to return failure status codes
     private static final long FAIL_PERIOD_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -215,7 +218,8 @@ public class SbiAIT {
                     Uninterruptibles.sleepUninterruptibly(5 + random.nextInt(35), TimeUnit.SECONDS);
 
                     Response.Builder responseBuilder = chain.proceed(request).newBuilder();
-                    if ((startTime + FAIL_PERIOD_MS) >= java.lang.System.currentTimeMillis()) {
+                    if (java.lang.System.currentTimeMillis() >= (startTime + FAIL_DELAY_MS) &&
+                        java.lang.System.currentTimeMillis() <= (startTime + FAIL_DELAY_MS + FAIL_PERIOD_MS)) {
                         responseBuilder.code(525);
                     }
 
