@@ -17,26 +17,22 @@ import com.breadwallet.crypto.events.system.SystemNetworkAddedEvent;
 import com.breadwallet.crypto.events.transfer.TranferEvent;
 import com.breadwallet.crypto.events.wallet.WalletEvent;
 import com.breadwallet.crypto.events.walletmanager.WalletManagerChangedEvent;
+import com.breadwallet.crypto.events.walletmanager.WalletManagerCreatedEvent;
 import com.breadwallet.crypto.events.walletmanager.WalletManagerEvent;
-import com.breadwallet.crypto.events.walletmanager.WalletManagerWalletAddedEvent;
 import com.google.common.io.Files;
 import com.google.common.util.concurrent.Uninterruptibles;
 
-import org.jetbrains.annotations.NotNull;
 import org.junit.Before;
 import org.junit.Test;
 
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
-import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -69,8 +65,11 @@ public class SbiAIT {
             "xpIjoiZGViNjNlMjgtMDM0NS00OGY2LTlkMTctY2U4MGNiZDYxN2NiIn0." +
             "460_GdAWbONxqOhWL5TEbQ7uEZi3fSNrl0E_Zg7MAg570CVcgO7rSMJvAPwaQtvIx1XFK_QZjcoNULmB8EtOdg";
 
-    // if no state change has been observed in this period of time, manager is considered stalled
-    private static final long STATE_CHANGE_WINDOW_MS = 2 * 60 * 1000; // 2 minutes
+    // test runtime
+    private static final long RUN_TIME_MS = 30 * 60 * 1000; // 30 minutes
+
+    // period of time to return failure status codes
+    private static final long FAIL_PERIOD_MS = 5 * 60 * 1000; // 5 minutes
 
     // Test
 
@@ -95,42 +94,32 @@ public class SbiAIT {
     @Test
     public void sbi() {
         List<SbiSystem> sbiSystems = new ArrayList<>(SYSTEM_COUNT);
-        Set<SbiSystem> activeSystems = new HashSet<>(SYSTEM_COUNT);
+
+        log("Starting test");
 
         // create systems
+        log("Creating systems");
         for (int i = 0; i < SYSTEM_COUNT; i++) {
-            final String id = "SYSTEM-" + i;
-            sbiSystems.add(new SbiSystem(id));
+            sbiSystems.add(new SbiSystem("SYSTEM-" + i));
         }
-        activeSystems.addAll(sbiSystems);
 
         // start systems
+        log("Starting systems");
         for (SbiSystem sbiSystem: sbiSystems) {
             sbiSystem.start();
         }
 
-        // poll systems
-        logSeparator();
-        while (!activeSystems.isEmpty()) {
-            Uninterruptibles.sleepUninterruptibly(10, TimeUnit.SECONDS);
-
-            for (SbiSystem sbiSystem : sbiSystems) {
-                SbiSystemState state = sbiSystem.poll();
-                log(sbiSystem.name, state.toString());
-
-                if (activeSystems.contains(sbiSystem) && state.isWalletManagerConnectCycleStalled()) {
-                    sbiSystem.stop();
-                    activeSystems.remove(sbiSystem);
-                    log(sbiSystem.name, "stalled, removing from active systems");
-
-                }
-            }
-        }
+        // sleep
+        log("Sleeping");
+        Uninterruptibles.sleepUninterruptibly(RUN_TIME_MS, TimeUnit.MILLISECONDS);
 
         // stop systems
+        log("Stopping systems");
         for (SbiSystem sbiSystem: sbiSystems) {
             sbiSystem.stop();
         }
+
+        log("Finishing test");
     }
 
     // System
@@ -139,9 +128,6 @@ public class SbiAIT {
 
         private final String name;
         private final System system;
-
-        private long stateChangeTimestamp;
-        private WalletManagerState currentState;
 
         SbiSystem(String name) {
             this.name = name;
@@ -166,18 +152,6 @@ public class SbiAIT {
             system.disconnectAll();
         }
 
-        synchronized SbiSystemState poll() {
-            return new SbiSystemState(
-                    stateChangeTimestamp,
-                    currentState
-            );
-        }
-
-        synchronized void updateForStateChange(WalletManagerState newState) {
-            stateChangeTimestamp = java.lang.System.currentTimeMillis();
-            currentState = newState;
-        }
-
         @Override
         public void handleSystemEvent(System system, SystemEvent event) {
             // create wallet manager for BTC network using API mode
@@ -189,16 +163,18 @@ public class SbiAIT {
                             Collections.emptySet());
                 }
             }
+
+            log(name, event.toString());
         }
 
         @Override
         public void handleManagerEvent(System system, WalletManager manager, WalletManagerEvent event) {
-            // connect wallet manager when wallet is added (this should be on WalletManagerCreatedEvent)
-            if (event instanceof WalletManagerWalletAddedEvent) {
+            // connect wallet manager created
+            if (event instanceof WalletManagerCreatedEvent) {
                 manager.connect(null);
             }
 
-            // re-connect when transitioned to disconnected
+            // reconnect when transitioned to disconnected
             if (event instanceof WalletManagerChangedEvent) {
                 WalletManagerChangedEvent e = (WalletManagerChangedEvent) event;
                 if (e.getNewState().getType().equals(WalletManagerState.Type.DISCONNECTED)) {
@@ -206,71 +182,44 @@ public class SbiAIT {
                 }
             }
 
-            // track all state changes of the wallet manager
-            if (event instanceof WalletManagerChangedEvent) {
-                WalletManagerChangedEvent e = (WalletManagerChangedEvent) event;
-                updateForStateChange(e.getNewState());
-            }
+            log(name, event.toString());
         }
 
         @Override
         public void handleWalletEvent(System system, WalletManager manager, Wallet wallet, WalletEvent event) {
-            // do nothing
+            log(name, event.toString());
         }
 
         @Override
         public void handleTransferEvent(System system, WalletManager manager, Wallet wallet, Transfer transfer, TranferEvent event) {
-            // do nothing
+            log(name, event.toString());
         }
 
         @Override
         public void handleNetworkEvent(System system, Network network, NetworkEvent event) {
-            // do nothing
-        }
-    }
-
-    // System State
-
-    private static class SbiSystemState {
-
-        private final long stateChangeTimestamp;
-        private final WalletManagerState currentState;
-
-        SbiSystemState(long stateChangeTimestamp,
-                       WalletManagerState currentState) {
-            this.stateChangeTimestamp = stateChangeTimestamp;
-            this.currentState = currentState;
-        }
-
-        boolean isWalletManagerConnectCycleStalled() {
-            boolean eventInWindow = stateChangeTimestamp > (java.lang.System.currentTimeMillis() - STATE_CHANGE_WINDOW_MS);
-            return (0 != stateChangeTimestamp && !eventInWindow);
-        }
-
-        @NotNull
-        @Override
-        public String toString() {
-            SimpleDateFormat eventFormatter = new SimpleDateFormat("HH:mm:ss");
-            String eventTimestamp = eventFormatter.format(new Date(this.stateChangeTimestamp));
-            return String.format("lastState = %-32s lastEventTs = %-16s", currentState, eventTimestamp);
+            log(name, event.toString());
         }
     }
 
     // BlockchainDB
 
     private static BlockchainDb createBlockchainDbWithFailureStatusCode() {
+        long startTime = java.lang.System.currentTimeMillis();
         Random random = new SecureRandom();
         OkHttpClient client = new OkHttpClient.Builder()
                 .addNetworkInterceptor(chain -> {
                     Request request = chain.request().newBuilder()
                             .header("Authorization", "Bearer " + BDB_AUTH_TOKEN)
                             .build();
-                    Response response = chain.proceed(request)
-                            .newBuilder()
-                            .code(525)
-                            .build();
+
                     Uninterruptibles.sleepUninterruptibly(5 + random.nextInt(35), TimeUnit.SECONDS);
-                    return response;
+
+                    Response.Builder responseBuilder = chain.proceed(request).newBuilder();
+                    if ((startTime + FAIL_PERIOD_MS) >= java.lang.System.currentTimeMillis()) {
+                        responseBuilder.code(525);
+                    }
+
+                    return responseBuilder.build();
                 })
                 .build();
         return new BlockchainDb(client);
@@ -301,10 +250,6 @@ public class SbiAIT {
     // Logging
 
     private static final Logger LOG = Logger.getLogger(SbiAIT.class.getName());
-
-    private static void logSeparator() {
-        log(" ");
-    }
 
     private static void log(String prefix, String message) {
         log(String.format("%-12s -> %s", prefix, message));
