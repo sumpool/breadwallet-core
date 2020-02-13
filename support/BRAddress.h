@@ -35,12 +35,12 @@ extern "C" {
 #endif
 
 // bitcoin address prefixes
-#define BITCOIN_PUBKEY_PREFIX       0
-#define BITCOIN_SCRIPT_PREFIX       5
-#define BITCOIN_PUBKEY_PREFIX_TEST  111
-#define BITCOIN_SCRIPT_PREFIX_TEST  196
-#define BITCOIN_PRIVKEY_PREFIX      128
-#define BITCOIN_PRIVKEY_PREFIX_TEST 239
+#define BITCOIN_PUBKEY_PREFIX       63
+#define BITCOIN_SCRIPT_PREFIX       200
+#define BITCOIN_PUBKEY_PREFIX_TEST  125
+#define BITCOIN_SCRIPT_PREFIX_TEST  8
+#define BITCOIN_PRIVKEY_PREFIX      191
+#define BITCOIN_PRIVKEY_PREFIX_TEST 253
 #define BITCOIN_BECH32_PREFIX       "bc"
 #define BITCOIN_BECH32_PREFIX_TEST  "tb"
 
@@ -81,10 +81,10 @@ size_t BRScriptPushData(uint8_t *script, size_t scriptLen, const uint8_t *data, 
 
 // returns a pointer to the 20byte pubkey hash, or NULL if none
 const uint8_t *BRScriptPKH(const uint8_t *script, size_t scriptLen);
-  
+
 // returns true if script contains a known valid scriptPubKey
 int BRScriptPubKeyIsValid(const uint8_t *script, size_t scriptLen);
-   
+
 typedef struct {
     uint8_t pubKeyPrefix;
     uint8_t scriptPrefix;
