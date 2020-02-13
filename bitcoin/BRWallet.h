@@ -35,8 +35,8 @@
 extern "C" {
 #endif
 
-#define DEFAULT_FEE_PER_KB (TX_FEE_PER_KB*10)                  // 10 satoshis-per-byte
-#define MIN_FEE_PER_KB     TX_FEE_PER_KB                       // bitcoind 0.12 default min-relay fee
+#define DEFAULT_FEE_PER_KB (TX_FEE_PER_KB*10000)               // 10000 sumtoshis-per-byte
+#define MIN_FEE_PER_KB     TX_FEE_PER_KB                       // sumcoind 0.16.1 & 0.17.1 default min-relay fee
 #define MAX_FEE_PER_KB     ((TX_FEE_PER_KB*1000100 + 190)/191) // slightly higher than a 10,000bit fee on a 191byte tx
 
 typedef struct {
@@ -124,7 +124,7 @@ uint64_t BRWalletTotalReceived(BRWallet *wallet);
 
 // writes unspent outputs to utxos and returns the number of outputs written, or number available if utxos is NULL
 size_t BRWalletUTXOs(BRWallet *wallet, BRUTXO utxos[], size_t utxosCount);
-    
+
 // fee-per-kb of transaction size to use when creating a transaction
 // the wallet maintains a fee per kb that is associated with it
 // this value can be set by calls to `BRWalletSetFeePerKb` but is also set in response to `feefilter` messages
@@ -187,7 +187,7 @@ int BRWalletTransactionIsVerified(BRWallet *wallet, const BRTransaction *tx);
 // use height TX_UNCONFIRMED and timestamp 0 to indicate a tx should remain marked as unverified (not 0-conf safe)
 void BRWalletUpdateTransactions(BRWallet *wallet, const UInt256 txHashes[], size_t txCount, uint32_t blockHeight,
                                 uint32_t timestamp);
-    
+
 // marks all transactions confirmed after blockHeight as unconfirmed (useful for chain re-orgs)
 void BRWalletSetTxUnconfirmedAfter(BRWallet *wallet, uint32_t blockHeight);
 
