@@ -46,7 +46,7 @@ extern "C" {
 #define TXIN_SEQUENCE        UINT32_MAX  // sequence number for a finalized tx input
 
 #define SATOSHIS             100000000LL
-#define MAX_MONEY            (21000000LL*SATOSHIS)
+#define MAX_MONEY            (100000000LL*SATOSHIS)
 
 typedef struct {
     UInt256 txHash;
