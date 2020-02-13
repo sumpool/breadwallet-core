@@ -37,6 +37,7 @@ import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.logging.Handler;
 import java.util.logging.Level;
 import java.util.logging.LogManager;
@@ -66,13 +67,13 @@ public class SbiAIT {
             "460_GdAWbONxqOhWL5TEbQ7uEZi3fSNrl0E_Zg7MAg570CVcgO7rSMJvAPwaQtvIx1XFK_QZjcoNULmB8EtOdg";
 
     // test runtime
-    private static final long RUN_TIME_MS = 30 * 60 * 1000; // 30 minutes
+    private static final long RUN_TIME_MS = 8 * 60 * 60 * 1000; // 8 hours
 
     // period of time to wait before failing
     private static final long FAIL_DELAY_MS = 10 * 60 * 1000; // 10 minutes
 
-    // period of time to return failure status codes
-    private static final long FAIL_PERIOD_MS = 5 * 60 * 1000; // 5 minutes
+    // period of time to check for events; system is deemed alive if a manager/wallet/transfer event was received in window
+    private static final long ACTIVITY_WINDOW_MS = 30 * 60 * 1000; // 30 minutes
 
     // Test
 
@@ -112,9 +113,14 @@ public class SbiAIT {
             sbiSystem.start();
         }
 
-        // sleep
-        log("Sleeping");
-        Uninterruptibles.sleepUninterruptibly(RUN_TIME_MS, TimeUnit.MILLISECONDS);
+        // running
+        long endTimeMs = currentTime() + RUN_TIME_MS;
+        while (currentTime() <= endTimeMs) {
+            for (SbiSystem sbiSystem: sbiSystems) {
+                log(sbiSystem.name, String.format("alive: %s", sbiSystem.isAlive()));
+            }
+            Uninterruptibles.sleepUninterruptibly(10, TimeUnit.SECONDS);
+        }
 
         // stop systems
         log("Stopping systems");
@@ -131,9 +137,11 @@ public class SbiAIT {
 
         private final String name;
         private final System system;
+        private final AtomicLong timestamp;
 
         SbiSystem(String name) {
             this.name = name;
+            this.timestamp = new AtomicLong(currentTime());
 
             File storageDir = Files.createTempDir();
             deleteRecursively(storageDir);
@@ -155,13 +163,16 @@ public class SbiAIT {
             system.disconnectAll();
         }
 
+        boolean isAlive() {
+            return timestamp.get() >= (currentTime() - ACTIVITY_WINDOW_MS);
+        }
+
         @Override
         public void handleSystemEvent(System system, SystemEvent event) {
             // create wallet manager for BTC network using API mode
             if (event instanceof SystemNetworkAddedEvent) {
                 SystemNetworkAddedEvent e = (SystemNetworkAddedEvent) event;
-                String currentCode = e.getNetwork().getCurrency().getCode();
-                if (currentCode.equals("btc") || currentCode.equals("bch")) {
+                if (e.getNetwork().getCurrency().getCode().equals("btc")) {
                     system.createWalletManager(e.getNetwork(), WalletManagerMode.API_ONLY, AddressScheme.BTC_LEGACY,
                             Collections.emptySet());
                 }
@@ -186,16 +197,19 @@ public class SbiAIT {
             }
 
             log(name, event.toString());
+            timestamp.set(currentTime());
         }
 
         @Override
         public void handleWalletEvent(System system, WalletManager manager, Wallet wallet, WalletEvent event) {
             log(name, event.toString());
+            timestamp.set(currentTime());
         }
 
         @Override
         public void handleTransferEvent(System system, WalletManager manager, Wallet wallet, Transfer transfer, TranferEvent event) {
             log(name, event.toString());
+            timestamp.set(currentTime());
         }
 
         @Override
@@ -207,7 +221,7 @@ public class SbiAIT {
     // BlockchainDB
 
     private static BlockchainDb createBlockchainDbWithFailureStatusCode() {
-        long startTime = java.lang.System.currentTimeMillis();
+        long startTime = currentTime();
         Random random = new SecureRandom();
         OkHttpClient client = new OkHttpClient.Builder()
                 .addNetworkInterceptor(chain -> {
@@ -218,8 +232,7 @@ public class SbiAIT {
                     Uninterruptibles.sleepUninterruptibly(5 + random.nextInt(35), TimeUnit.SECONDS);
 
                     Response.Builder responseBuilder = chain.proceed(request).newBuilder();
-                    if (java.lang.System.currentTimeMillis() >= (startTime + FAIL_DELAY_MS) &&
-                        java.lang.System.currentTimeMillis() <= (startTime + FAIL_DELAY_MS + FAIL_PERIOD_MS)) {
+                    if (currentTime() >= (startTime + FAIL_DELAY_MS)) {
                         responseBuilder.code(525);
                     }
 
@@ -249,6 +262,10 @@ public class SbiAIT {
             }
         }
         return file.delete();
+    }
+
+    private static long currentTime() {
+        return java.lang.System.currentTimeMillis();
     }
 
     // Logging
