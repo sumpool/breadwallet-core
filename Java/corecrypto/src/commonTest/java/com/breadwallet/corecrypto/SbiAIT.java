@@ -117,7 +117,9 @@ public class SbiAIT {
         long endTimeMs = currentTime() + RUN_TIME_MS;
         while (currentTime() <= endTimeMs) {
             for (SbiSystem sbiSystem: sbiSystems) {
-                log(sbiSystem.name, String.format("alive: %s", sbiSystem.isAlive()));
+                long ts = sbiSystem.lastActivity();
+                boolean alive = ts  >= (currentTime() - ACTIVITY_WINDOW_MS);
+                log(sbiSystem.name, String.format("alive: %s (%s)", alive, new Date(ts)));
             }
             Uninterruptibles.sleepUninterruptibly(10, TimeUnit.SECONDS);
         }
@@ -163,8 +165,8 @@ public class SbiAIT {
             system.disconnectAll();
         }
 
-        boolean isAlive() {
-            return timestamp.get() >= (currentTime() - ACTIVITY_WINDOW_MS);
+        long lastActivity() {
+            return timestamp.get();
         }
 
         @Override
